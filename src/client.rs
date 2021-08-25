@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel as channel;
 use parking_lot::Mutex;
+use smol::{future, Executor};
 
 use crate::connector::{Connector, NatsStream};
 use crate::message::Message;
@@ -533,6 +534,42 @@ impl Client {
                 if !first_connect {
                     connector.get_options().reconnect_callback.call();
                 }
+                let client_clone = self.clone();
+
+                let ex = Executor::new();
+
+                let _handle = ex.spawn(async move {
+                    println!("loop");
+                    loop {
+                        smol::Timer::after(Duration::from_secs(120)).await;
+
+                        let mut state_timeout = client_clone.state.write.lock();
+
+                        println!("TASK RUNING");
+
+                        match state_timeout.writer.as_mut() {
+                            None => {
+                                println!("None write");
+                            }
+                            Some(mut writer) => {
+                                let encode =
+                                    proto::encode(&mut writer, ClientOp::Ping);
+                                match encode {
+                                    Ok(_) => println!("ok ping"),
+                                    Err(_) => println!("failed  ping"),
+                                }
+                                let result = writer.flush();
+                                match result {
+                                    Ok(_) => println!("ok ping"),
+                                    Err(_) => println!("failed ping"),
+                                }
+                            }
+                        }
+                    }
+                });
+                thread::spawn(move || {
+                    future::block_on(ex.run(future::pending::<()>()))
+                });
                 if self.dispatch(reader, &mut connector).is_ok() {
                     // If the client stopped gracefully, return.
                     return Ok(());

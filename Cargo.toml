@@ -27,6 +27,7 @@ panic = 'abort'
 split-debuginfo = "unpacked"
 
 [dependencies]
+smol="1.2.5"
 base64 = "0.13.0"
 base64-url = "1.4.10"
 blocking = "1.0.2"
